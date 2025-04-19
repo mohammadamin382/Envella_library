@@ -288,7 +288,7 @@ Contributions to Envella are welcome! Here's how you can contribute:
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-Please read [CONTRIBUTING.md](https://github.com/mohammadamin382/Envella_library/blob/main/CONTRIBUTING.md) for more details.
+For the full documentation, see the [Comprehensive Guide](https://github.com/mohammadamin382/Envella_library/blob/main/GUIDE.md)
 
 ## 📝 License
 
