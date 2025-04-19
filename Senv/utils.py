@@ -29,35 +29,34 @@ def cast_value(value: str) -> Any:
         The value cast to the most appropriate type
     """
     # Check for empty value
-    if value == "":
+    if not value:
         return ""
         
-    # Boolean check
-    if value.lower() in ("true", "yes", "1", "on"):
+    # Use a cached lowercase value to avoid repeated conversions
+    value_lower = value.lower()
+    
+    # Boolean check - most common case first for speed
+    if value_lower == "true" or value_lower == "yes" or value_lower == "1" or value_lower == "on":
         return True
-    if value.lower() in ("false", "no", "0", "off"):
+    if value_lower == "false" or value_lower == "no" or value_lower == "0" or value_lower == "off":
         return False
+    
+    # Integer check - faster than regex for common case
+    if value.isdigit() or (value.startswith('-') and value[1:].isdigit()):
+        return int(value)
         
-    # Number check
+    # Float check - more efficient approach
     try:
-        # Try as int first
-        if re.match(r'^-?\d+$', value):
-            return int(value)
-        # Then as float
-        if re.match(r'^-?\d+\.\d+$', value):
+        if '.' in value:
             return float(value)
-    except (ValueError, TypeError):
+    except ValueError:
         pass
         
-    # List check (JSON array)
-    if value.startswith('[') and value.endswith(']'):
-        try:
-            return json.loads(value)
-        except json.JSONDecodeError:
-            pass
-            
-    # Dict check (JSON object)
-    if value.startswith('{') and value.endswith('}'):
+    # JSON checks for complex types
+    first_char = value[0] if value else ''
+    last_char = value[-1] if value else ''
+    
+    if (first_char == '[' and last_char == ']') or (first_char == '{' and last_char == '}'):
         try:
             return json.loads(value)
         except json.JSONDecodeError:
@@ -108,6 +107,7 @@ def derive_key(password: str, salt: Optional[bytes] = None) -> tuple:
 def encrypt_value(value: str, password: str) -> str:
     """
     Encrypt a value using Fernet symmetric encryption.
+    Optimized for speed with better memory management.
     
     Args:
         value: The value to encrypt
@@ -116,17 +116,31 @@ def encrypt_value(value: str, password: str) -> str:
     Returns:
         Encrypted value as a base64-encoded string
     """
-    key, salt = derive_key(password)
-    f = Fernet(key)
-    encrypted = f.encrypt(value.encode('utf-8'))
+    # Use cached Fernet instances based on password hash to avoid recreating
+    password_hash = str(hash(password))
+    if not hasattr(encrypt_value, 'key_cache'):
+        encrypt_value.key_cache = {}
     
-    # Combine salt and encrypted data
+    if password_hash in encrypt_value.key_cache:
+        key, salt, f = encrypt_value.key_cache[password_hash]
+    else:
+        key, salt = derive_key(password)
+        f = Fernet(key)
+        # Cache for future use with same password
+        encrypt_value.key_cache[password_hash] = (key, salt, f)
+    
+    # Encode and encrypt in a single operation
+    value_bytes = value.encode('utf-8')
+    encrypted = f.encrypt(value_bytes)
+    
+    # More efficient combination
     result = base64.urlsafe_b64encode(salt + encrypted).decode('ascii')
     return result
 
 def decrypt_value(encrypted_value: str, password: str) -> str:
     """
     Decrypt a value that was encrypted with encrypt_value.
+    Optimized for speed with cached operations.
     
     Args:
         encrypted_value: The encrypted value as a base64-encoded string
@@ -135,17 +149,25 @@ def decrypt_value(encrypted_value: str, password: str) -> str:
     Returns:
         Decrypted value as a string
     """
-    # Decode the combined salt and encrypted data
+    # Decode once
     data = base64.urlsafe_b64decode(encrypted_value.encode('ascii'))
     salt, encrypted = data[:16], data[16:]
     
-    # Derive the key with the same salt
-    key, _ = derive_key(password, salt)
-    f = Fernet(key)
+    # Use cached Fernet instances for decryption
+    salt_hash = str(hash(salt))
+    if not hasattr(decrypt_value, 'key_cache'):
+        decrypt_value.key_cache = {}
     
-    # Decrypt
-    decrypted = f.decrypt(encrypted).decode('utf-8')
-    return decrypted
+    cache_key = f"{password}:{salt_hash}"
+    if cache_key in decrypt_value.key_cache:
+        f = decrypt_value.key_cache[cache_key]
+    else:
+        key, _ = derive_key(password, salt)
+        f = Fernet(key)
+        decrypt_value.key_cache[cache_key] = f
+    
+    # Decrypt and decode in a single operation
+    return f.decrypt(encrypted).decode('utf-8')
 
 def generate_secure_key(length: int = 32) -> str:
     """
