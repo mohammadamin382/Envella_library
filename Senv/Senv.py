@@ -1873,6 +1873,8 @@ class SecureDotEnv:
             if key in self._values and not self._values[key].startswith('ENC:'):
                 # Check if it looks like a hardcoded credential
                 value = self._values[key]
+                # Use the _calculate_entropy function from utils module
+                from Senv.utils import _calculate_entropy
                 if len(value) > 8 and _calculate_entropy(value) > 3.0:
                     report["security_issues"].append({
                         "severity": "high",
