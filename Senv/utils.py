@@ -794,9 +794,13 @@ def verify_totp_code(secret: str, code: str,
         True if the code is valid, False otherwise
     """
     import hmac
+    import hashlib
     import base64
     import struct
     import time
+    
+    # Use getattr for better performance than dynamic string lookup
+    hash_func = getattr(hashlib, hash_algorithm)
     
     if not code or not code.isdigit():
         return False
@@ -853,6 +857,9 @@ def generate_recovery_codes(count: int = 10, length: int = 16) -> List[str]:
     Returns:
         List of recovery codes
     """
+    import secrets
+    from typing import List
+    
     codes = []
     for _ in range(count):
         # Generate a random recovery code with dashes for readability
