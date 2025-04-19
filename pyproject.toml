@@ -4,7 +4,7 @@ requires = ["setuptools>=42.0.0", "wheel>=0.37.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "Senv"
+name = "Envella"
 version = "1.0.0"
 description = "A comprehensive, secure and advanced library for managing .env files"
 authors = [
@@ -49,9 +49,9 @@ advanced = [
 ]
 
 [project.urls]
-"Repository" = "https://github.com/mohammadamin382/Senv_library.git"
-"Bug Tracker" = "https://github.com/mohammadamin382/Senv_library/issues"
-"Documentation" = "https://github.com/mohammadamin382/Senv_library"
+"Repository" = "https://github.com/mohammadamin382/Envella_library.git"
+"Bug Tracker" = "https://github.com/mohammadamin382/Envella_library/issues"
+"Documentation" = "https://github.com/mohammadamin382/Envella_library"
 
 [tool.black]
 line-length = 88
