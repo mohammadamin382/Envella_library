@@ -22,7 +22,8 @@ from Senv.utils import (
     generate_secure_key, encrypt_value, decrypt_value,
     encrypt_with_quantum_resistant_hybrid, decrypt_with_quantum_resistant_hybrid,
     vault_encrypt, vault_decrypt, generate_mfa_secret, verify_totp_code,
-    assess_password_strength, generate_environment_integrity_signature
+    assess_password_strength, generate_environment_integrity_signature,
+    generate_recovery_codes
 )
 
 def print_header(title):
