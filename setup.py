@@ -6,15 +6,15 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
-    name="Senv",
+    name="Envella",
     version="1.0.0",
     author="Mohammad Hosseini",
 
-    author_email="moahmmad.hosseinii@gmail.com",
+    author_email="noting@noting.com",
     description="A comprehensive, secure and advanced library for managing .env files",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/mohammadamin382/Senv_library.git",
+    url="https://github.com/mohammadamin382/Envella_library.git",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 5 - Production/Stable",
@@ -51,10 +51,10 @@ setup(
             "pyotp>=2.8.0"
         ]
     },
-    keywords="dotenv, environment, security, encryption, configuration, secrets, senv",
+    keywords="dotenv, environment, security, encryption, configuration, secrets, envella",
     project_urls={
-        "Bug Tracker": "https://github.com/mohammadamin382/Senv_library/issues",
-        "Documentation": "https://github.com/mohammadamin382/Senv_library",
-        "Source Code": "https://github.com/mohammadamin382/Senv_library",
+        "Bug Tracker": "https://github.com/mohammadamin382/Envella_library/issues",
+        "Documentation": "https://github.com/mohammadamin382/Envella_library",
+        "Source Code": "https://github.com/mohammadamin382/Envella_library",
     },
 )
