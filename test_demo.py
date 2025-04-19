@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Comprehensive test and demonstration script for Senv library.
+Comprehensive test and demonstration script for Envella library.
 This script showcases the advanced security features and enhanced functionality.
 
 Author: Mohammad Hosseini
@@ -15,9 +15,9 @@ import base64
 import sys
 import hashlib
 
-# Import the Senv library
-from Senv import Senv
-from Senv.utils import (
+# Import the Envella library
+from Envella import Envella
+from Envella.utils import (
     generate_secure_key, encrypt_value, decrypt_value,
     encrypt_with_quantum_resistant_hybrid, decrypt_with_quantum_resistant_hybrid,
     vault_encrypt, vault_decrypt, generate_mfa_secret, verify_totp_code,
@@ -73,11 +73,11 @@ MAX_CONNECTIONS=500
     return temp_dir, env_path, env_prod_path
 
 def demo_basic_usage(env_path):
-    """Demonstrate basic Senv usage."""
+    """Demonstrate basic Envella usage."""
     print_header("Basic Usage")
 
-    # Create a new Senv instance
-    env = Senv()
+    # Create a new Envella instance
+    env = Envella()
 
     # Import the environment from a file
     env.import_env(env_path)
@@ -109,11 +109,11 @@ def demo_enhanced_security(env_path):
     """Demonstrate enhanced security features."""
     print_header("Enhanced Security Features")
 
-    # Create a Senv instance with an encryption key
+    # Create a Envella instance with an encryption key
     encryption_key = generate_secure_key()
     print(f"Generated encryption key: {encryption_key[:10]}...{encryption_key[-10:]}")
 
-    env = Senv(encryption_key=encryption_key)
+    env = Envella(encryption_key=encryption_key)
     env.import_env(env_path)
 
     # Identify sensitive keys
@@ -161,7 +161,7 @@ def demo_multi_environment(temp_dir):
     """Demonstrate multi-environment configuration."""
     print_header("Multi-Environment Configuration")
 
-    env = Senv(environment="development")
+    env = Envella(environment="development")
 
     # Load multiple environments
     loaded_files = env.load_dotenv_from_directory(temp_dir)
@@ -181,7 +181,7 @@ def demo_multi_environment(temp_dir):
         print("\nNo compliance issues found for production environment")
 
     # Create a production environment
-    prod_env = Senv(environment="production")
+    prod_env = Envella(environment="production")
     prod_env.import_env(os.path.join(temp_dir, ".env.production"))
 
     print("\nProduction environment variables:")
@@ -192,7 +192,7 @@ def demo_advanced_features():
     """Demonstrate advanced features."""
     print_header("Advanced Features")
 
-    # Create a Senv with custom configuration
+    # Create a Envella with custom configuration
     user_config = {
         "log_level": "info",
         "sensitive_patterns": [r".*api_token.*", r".*passphrase.*"],
@@ -200,11 +200,11 @@ def demo_advanced_features():
         "min_password_length": 14
     }
 
-    env = Senv(user_config=user_config)
+    env = Envella(user_config=user_config)
 
     # Set values manually
     env.set("API_TOKEN", "abcdef123456", comment="Token for external API")
-    env.set("APP_NAME", "Senv Demo")
+    env.set("APP_NAME", "Envella Demo")
     env.set("DEBUG", "false")
     env.set("MAX_RETRY", "5")
 
@@ -321,8 +321,8 @@ def demo_mfa_features():
         print(f"  {code}")
 
 def main():
-    """Main function demonstrating Senv capabilities."""
-    print_header("Senv Library Demonstration")
+    """Main function demonstrating Envella capabilities."""
+    print_header("Envella Library Demonstration")
     print("Version: 1.0.0")
     print("Author: Mohammad Hosseini")
     print("License: GPL-3.0\n")
@@ -339,7 +339,7 @@ def main():
         demo_mfa_features()
 
         print_header("Demonstration Complete")
-        print("Senv provides a comprehensive, secure, and highly advanced solution")
+        print("Envella provides a comprehensive, secure, and highly advanced solution")
         print("for managing environment variables with a focus on security and ease of use.")
 
     finally:
