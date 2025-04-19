@@ -213,55 +213,59 @@ class SecureDotEnv:
     def _parse_env_content(self, content: str, source: str, override: bool) -> None:
         """
         Parse the content of an env file and extract key-value pairs.
+        Optimized for speed with fewer regex checks and more direct string operations.
         
         Args:
             content: The file content as a string
             source: Source identifier (filename) for error reporting
             override: Whether to override existing values
         """
-        lines = content.splitlines()
-        line_num = 0
+        # Precompile regex patterns for sensitive key detection - huge performance boost
+        sensitive_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in self.SENSITIVE_KEY_PATTERNS]
         
-        for line in lines:
-            line_num += 1
-            
-            # Skip empty lines and comments
+        # Process all lines in a single pass
+        lines = content.splitlines()
+        modified = False
+        
+        for line_num, line in enumerate(lines, 1):
+            # Skip empty lines and comments - fast path
             line = line.strip()
-            if not line or line.startswith('#'):
+            if not line or line[0] == '#':
                 continue
                 
-            # Extract inline comments
-            if '#' in line:
-                content_part, comment_part = line.split('#', 1)
-                line = content_part.strip()
-                comment = comment_part.strip()
-            else:
-                comment = ''
+            # Extract inline comments - faster than split when comment is rare
+            comment = ''
+            comment_pos = line.find('#')
+            if comment_pos > 0:  # Not at start and exists
+                comment = line[comment_pos+1:].strip()
+                line = line[:comment_pos].strip()
                 
-            # Parse key-value pair
-            if '=' in line:
-                key, value = line.split('=', 1)
-                key = key.strip()
-                value = value.strip()
+            # Parse key-value pair with faster check
+            equals_pos = line.find('=')
+            if equals_pos > 0:  # Ensures key isn't empty
+                key = line[:equals_pos].strip()
+                value = line[equals_pos+1:].strip()
                 
-                # Store only if key is valid
-                if key:
-                    # Check if this key already exists and we're not overriding
-                    if key in self._values and not override:
-                        continue
-                        
-                    # Check if key matches sensitive patterns
-                    if any(re.match(pattern, key, re.IGNORECASE) for pattern in self.SENSITIVE_KEY_PATTERNS):
-                        self._sensitive_keys.add(key)
-                        
+                # Fast path for common case - valid key and we're overriding or key doesn't exist
+                if override or key not in self._values:
+                    # Check sensitivity with precompiled patterns
+                    for pattern in sensitive_patterns:
+                        if pattern.search(key):
+                            self._sensitive_keys.add(key)
+                            break
+                            
                     # Store the value and comment
                     self._values[key] = value
                     if comment:
                         self._comment_map[key] = comment
                     
-                    self._modified = True
+                    modified = True
             else:
                 logger.warning(f"Invalid line format at {source}:{line_num}: {line}")
+        
+        # Only set modified flag once if needed
+        if modified:
+            self._modified = True
     
     def _security_scan(self, content: str, source: str) -> bool:
         """
