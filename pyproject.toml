@@ -1,0 +1,62 @@
+
+[build-system]
+requires = ["setuptools>=42.0.0", "wheel>=0.37.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "Senv"
+version = "1.0.0"
+description = "A comprehensive, secure and advanced library for managing .env files"
+authors = [
+    {name = "Mohammad Hosseini", email = "mohammad.hosseini@example.com"}
+]
+readme = "README.md"
+requires-python = ">=3.7"
+license = {text = "GPL-3.0"}
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "cryptography>=44.0.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.5",
+    "black>=22.0.0",
+    "flake8>=4.0.0",
+    "mypy>=0.900",
+    "isort>=5.0.0",
+]
+test = [
+    "pytest>=8.3.5",
+    "pytest-cov>=3.0.0",
+]
+advanced = [
+    "argon2-cffi>=21.0.0",
+    "zxcvbn>=4.4.28",
+    "pyotp>=2.8.0"
+]
+
+[project.urls]
+"Repository" = "https://github.com/mohammadamin382/Senv_library.git"
+"Bug Tracker" = "https://github.com/mohammadamin382/Senv_library/issues"
+"Documentation" = "https://github.com/mohammadamin382/Senv_library"
+
+[tool.black]
+line-length = 88
+target-version = ["py37", "py38", "py39", "py310", "py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 88
