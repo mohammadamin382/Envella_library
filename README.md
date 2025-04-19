@@ -1,19 +1,20 @@
 
+
 <p align="center">
-  <img src="https://raw.githubusercontent.com/mohammadamin382/Senv_library/main/assets/senv_logo.png" alt="Senv Logo" width="200"/>
+  <img src="https://raw.githubusercontent.com/mohammadamin382/Envella_library/main/assets/envella_logo.png" alt="Envella Logo" width="200"/>
 </p>
 
-<h1 align="center">Senv</h1>
+<h1 align="center">Envella</h1>
 
 <p align="center">
   <strong>A comprehensive, secure, and highly advanced environment variable management library for Python</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/mohammadamin382/Senv_library/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue.svg" alt="License: GPL-3.0"></a>
-  <a href="https://pypi.org/project/Senv/"><img src="https://img.shields.io/pypi/v/Senv.svg" alt="PyPI Version"></a>
-  <a href="https://pypi.org/project/Senv/"><img src="https://img.shields.io/pypi/pyversions/Senv.svg" alt="Python Versions"></a>
-  <a href="https://pypi.org/project/Senv/"><img src="https://img.shields.io/pypi/dm/Senv.svg" alt="PyPI Downloads"></a>
+  <a href="https://github.com/mohammadamin382/Envella_library/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue.svg" alt="License: GPL-3.0"></a>
+  <a href="https://pypi.org/project/Envella/"><img src="https://img.shields.io/pypi/v/Envella.svg" alt="PyPI Version"></a>
+  <a href="https://pypi.org/project/Envella/"><img src="https://img.shields.io/pypi/pyversions/Envella.svg" alt="Python Versions"></a>
+  <a href="https://pypi.org/project/Envella/"><img src="https://img.shields.io/pypi/dm/Envella.svg" alt="PyPI Downloads"></a>
 </p>
 
 <p align="center">
@@ -43,7 +44,7 @@
 - **Compliance Checking**: Verify environment variable compliance with best practices
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/mohammadamin382/Senv_library/main/assets/senv_flow.png" alt="Senv Flow Diagram" width="700"/>
+  <img src="https://raw.githubusercontent.com/mohammadamin382/Envella_library/main/assets/envella_flow.png" alt="Envella Flow Diagram" width="700"/>
 </div>
 
 ## 📦 Installation
@@ -51,29 +52,29 @@
 ### Using pip
 
 ```bash
-pip install Senv
+pip install Envella
 ```
 
 ### Advanced installation with optional dependencies
 
 ```bash
 # Install with advanced security features
-pip install Senv[advanced]
+pip install Envella[advanced]
 
 # Install with development tools
-pip install Senv[dev]
+pip install Envella[dev]
 
 # Install with testing tools
-pip install Senv[test]
+pip install Envella[test]
 ```
 
 ## 🚀 Quick Start
 
 ```python
-from Senv import Senv
+from Envella import Envella
 
-# Create a new Senv instance
-env = Senv()
+# Create a new Envella instance
+env = Envella()
 
 # Load environment variables from .env file
 env.import_env(".env")
@@ -111,13 +112,13 @@ API_URL=https://api.example.com
 ### Encryption for Sensitive Values
 
 ```python
-from Senv import Senv, generate_secure_key
+from Envella import Envella, generate_secure_key
 
 # Generate a secure encryption key
 encryption_key = generate_secure_key()
 
-# Create a Senv instance with encryption support
-env = Senv(encryption_key=encryption_key)
+# Create a Envella instance with encryption support
+env = Envella(encryption_key=encryption_key)
 
 # Load environment variables
 env.import_env(".env")
@@ -134,11 +135,11 @@ env.save(".env.encrypted")
 ### Multi-Environment Configuration
 
 ```python
-from Senv import Senv
+from Envella import Envella
 
 # Create environment-specific instances
-dev_env = Senv(environment="development")
-prod_env = Senv(environment="production")
+dev_env = Envella(environment="development")
+prod_env = Envella(environment="production")
 
 # Load environment-specific configuration
 dev_env.import_env(".env.development")
@@ -154,9 +155,9 @@ debug = current_env.get("DEBUG", cast_type=bool)
 ### Schema Validation
 
 ```python
-from Senv import Senv
+from Envella import Envella
 
-env = Senv()
+env = Envella()
 env.import_env(".env")
 
 # Define a schema for validation
@@ -190,7 +191,7 @@ if not valid:
 ```
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/mohammadamin382/Senv_library/main/assets/senv_security.png" alt="Senv Security Features" width="500"/>
+  <img src="https://raw.githubusercontent.com/mohammadamin382/Envella_library/main/assets/envella_security.png" alt="Envella Security Features" width="500"/>
 </div>
 
 ## 🔒 Security Features
@@ -198,9 +199,9 @@ if not valid:
 ### Audit Environment Security
 
 ```python
-from Senv import Senv
+from Envella import Envella
 
-env = Senv()
+env = Envella()
 env.import_env(".env.production")
 
 # Perform a comprehensive security audit
@@ -216,7 +217,7 @@ if not audit["compliance"]["compliant"]:
 ### Quantum-Resistant Encryption
 
 ```python
-from Senv.utils import encrypt_with_quantum_resistant_hybrid, decrypt_with_quantum_resistant_hybrid
+from Envella.utils import encrypt_with_quantum_resistant_hybrid, decrypt_with_quantum_resistant_hybrid
 
 # Encrypt sensitive configuration
 config_data = json.dumps({"api_keys": {"service_a": "secret_key_123"}})
@@ -230,8 +231,8 @@ config = json.loads(decrypted)
 ### MFA Support
 
 ```python
-from Senv import Senv
-from Senv.utils import generate_mfa_secret, verify_totp_code
+from Envella import Envella
+from Envella.utils import generate_mfa_secret, verify_totp_code
 
 # Generate a secret for MFA
 mfa_secret = generate_mfa_secret()
@@ -248,7 +249,7 @@ is_valid = verify_totp_code(code, mfa_secret)
 
 | Method | Description |
 |--------|-------------|
-| `Senv(encryption_key=None, environment="development", user_config=None)` | Initialize a new Senv instance |
+| `Envella(encryption_key=None, environment="development", user_config=None)` | Initialize a new Envella instance |
 | `import_env(path=".env", override=False, export_globals=False, safe_mode=True)` | Import environment variables from a file |
 | `get(key, default=None, cast_type=None)` | Get a value with optional default and type casting |
 | `set(key, value, comment=None)` | Set a value for a key |
@@ -279,7 +280,7 @@ is_valid = verify_totp_code(code, mfa_secret)
 
 ## 🤝 Contributing
 
-Contributions to Senv are welcome! Here's how you can contribute:
+Contributions to Envella are welcome! Here's how you can contribute:
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -287,11 +288,11 @@ Contributions to Senv are welcome! Here's how you can contribute:
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-Please read [CONTRIBUTING.md](https://github.com/mohammadamin382/Senv_library/blob/main/CONTRIBUTING.md) for more details.
+Please read [CONTRIBUTING.md](https://github.com/mohammadamin382/Envella_library/blob/main/CONTRIBUTING.md) for more details.
 
 ## 📝 License
 
-This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](https://github.com/mohammadamin382/Senv_library/blob/main/LICENSE) file for details.
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](https://github.com/mohammadamin382/Envella_library/blob/main/LICENSE) file for details.
 
 ---
 
@@ -300,6 +301,6 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 </p>
 
 <p align="center">
-  <a href="https://github.com/mohammadamin382/Senv_library">GitHub</a> •
-  <a href="https://pypi.org/project/Senv/">PyPI</a>
+  <a href="https://github.com/mohammadamin382/Envella_library">GitHub</a> •
+  <a href="https://pypi.org/project/Envella/">PyPI</a>
 </p>
