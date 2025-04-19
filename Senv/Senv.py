@@ -371,13 +371,11 @@ class SecureDotEnv:
             Dictionary of environment variables
         """
         if not cast_types:
+            # Return a shallow copy to prevent modification of internal data
             return dict(self._values)
         
-        result = {}
-        for key, value in self._values.items():
-            result[key] = cast_value(value)
-            
-        return result
+        # Use dictionary comprehension for better performance
+        return {key: cast_value(value) for key, value in self._values.items()}
     
     def load_dotenv_from_directory(self, path: str = ".", 
                                   filename: Optional[str] = None,
@@ -562,14 +560,18 @@ class SecureDotEnv:
         if not self._encryption_key:
             logger.warning("No encryption key provided, skipping encryption")
             return
+        
+        # Count how many values are actually encrypted
+        encrypted_count = 0
             
         for key in self._sensitive_keys:
             if key in self._values and not self._values[key].startswith('ENC:'):
                 plain_value = self._values[key]
                 encrypted = encrypt_value(plain_value, self._encryption_key)
                 self._values[key] = f"ENC:{encrypted}"
+                encrypted_count += 1
                 
-        logger.info(f"Encrypted {len(self._sensitive_keys)} sensitive values")
+        logger.info(f"Encrypted {encrypted_count} sensitive values")
     
     def decrypt_sensitive_values(self) -> None:
         """
