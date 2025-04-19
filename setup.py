@@ -10,7 +10,7 @@ setup(
     version="1.0.0",
     author="Mohammad Hosseini",
 
-    author_email="noting@noting.com",
+    author_email="moahmmad.hosseinii@gmail.com",
     description="A comprehensive, secure and advanced library for managing .env files",
     long_description=long_description,
     long_description_content_type="text/markdown",
