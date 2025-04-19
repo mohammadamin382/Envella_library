@@ -1,4 +1,3 @@
-
 """
 Comprehensive tests for SecureDotEnv.
 """
@@ -12,8 +11,8 @@ from pathlib import Path
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from Senv import SecureDotEnv
-from Senv.exceptions import SecurityError
+from Envella import SecureDotEnv
+from Envella.exceptions import SecurityError
 
 class TestSecureDotEnv(unittest.TestCase):
     """Test suite for SecureDotEnv"""
