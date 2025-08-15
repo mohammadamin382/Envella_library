@@ -121,7 +121,7 @@ def derive_key(password: str, salt: Optional[bytes] = None) -> tuple:
 def encrypt_value(value: str, password: str) -> str:
     """
     Encrypt a value using Fernet symmetric encryption.
-    Optimized for speed with better memory management.
+    Uses a unique salt for each encryption operation.
     
     Args:
         value: The value to encrypt
@@ -130,24 +130,15 @@ def encrypt_value(value: str, password: str) -> str:
     Returns:
         Encrypted value as a base64-encoded string
     """
-    # Use cached Fernet instances based on password hash to avoid recreating
-    password_hash = str(hash(password))
-    if not hasattr(encrypt_value, 'key_cache'):
-        encrypt_value.key_cache = {}
+    # Generate unique salt for each encryption
+    key, salt = derive_key(password)
+    f = Fernet(key)
     
-    if password_hash in encrypt_value.key_cache:
-        key, salt, f = encrypt_value.key_cache[password_hash]
-    else:
-        key, salt = derive_key(password)
-        f = Fernet(key)
-        # Cache for future use with same password
-        encrypt_value.key_cache[password_hash] = (key, salt, f)
-    
-    # Encode and encrypt in a single operation
+    # Encode and encrypt
     value_bytes = value.encode('utf-8')
     encrypted = f.encrypt(value_bytes)
     
-    # More efficient combination
+    # Combine salt and encrypted data
     result = base64.urlsafe_b64encode(salt + encrypted).decode('ascii')
     return result
 
@@ -835,14 +826,14 @@ def verify_totp_code(secret: str, code: str,
     import struct
     import time
     
-    # Use getattr for better performance than dynamic string lookup
-    hash_func = getattr(hashlib, hash_algorithm)
+    # Normalize the code by removing spaces first
+    code = ''.join(str(code).split())
     
     if not code or not code.isdigit():
         return False
-
-    # Normalize the code by removing spaces
-    code = code.replace(" ", "")
+    
+    # Use getattr for hash function
+    hash_func = getattr(hashlib, hash_algorithm)
     
     # Determine digits from code length
     digits = len(code)
@@ -862,7 +853,7 @@ def verify_totp_code(secret: str, code: str,
             secret_bytes = base64.b32decode(secret.upper())
             
             # Generate HMAC with specified hash algorithm
-            hmac_hash = hmac.new(secret_bytes, time_bytes, hash_algorithm).digest()
+            hmac_hash = hmac.new(secret_bytes, time_bytes, hash_func).digest()
             
             # Extract bytes as specified by RFC 6238
             offset = hmac_hash[-1] & 0x0F
@@ -1016,6 +1007,7 @@ def decrypt_with_quantum_resistant_hybrid(encrypted_value: str, password: str) -
 def vault_encrypt(value: str, master_key: str, key_id: str = None) -> Dict[str, str]:
     """
     Encrypt a value using a vault-like approach with key versioning.
+    Uses AES-GCM for authenticated encryption and proper KDF.
     
     Args:
         value: The value to encrypt
@@ -1025,56 +1017,45 @@ def vault_encrypt(value: str, master_key: str, key_id: str = None) -> Dict[str, 
     Returns:
         Dictionary with encryption metadata and encrypted value
     """
-    # Generate a data key that will encrypt the actual value
-    data_key = secrets.token_bytes(32)
+    from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     
-    # Generate a random IV
-    iv = os.urandom(16)
+    # Generate a unique salt for key derivation
+    salt = os.urandom(16)
     
-    # Use AES-256-CBC to encrypt the value with the data key
-    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-    from cryptography.hazmat.primitives import padding
+    # Use Scrypt KDF for the master key
+    kdf = Scrypt(
+        salt=salt,
+        length=32,
+        n=2**15,  # CPU cost parameter
+        r=8,      # Block size parameter
+        p=1       # Parallelization parameter
+    )
+    derived_key = kdf.derive(master_key.encode())
     
-    # Pad the value
-    padder = padding.PKCS7(algorithms.AES.block_size).padder()
-    padded_data = padder.update(value.encode()) + padder.finalize()
+    # Use AES-GCM for authenticated encryption
+    aesgcm = AESGCM(derived_key)
+    nonce = os.urandom(12)
     
-    # Encrypt the value
-    cipher = Cipher(algorithms.AES(data_key), modes.CBC(iv))
-    encryptor = cipher.encryptor()
-    encrypted_value = encryptor.update(padded_data) + encryptor.finalize()
-    
-    # Encrypt the data key with the master key
-    key_iv = os.urandom(16)
-    
-    # Derive the actual master key
-    master_key_bytes = hashlib.sha256(master_key.encode()).digest()
-    
-    # Encrypt the data key
-    cipher = Cipher(algorithms.AES(master_key_bytes), modes.CBC(key_iv))
-    encryptor = cipher.encryptor()
-    
-    # Pad the data key
-    padder = padding.PKCS7(algorithms.AES.block_size).padder()
-    padded_key = padder.update(data_key) + padder.finalize()
-    
-    encrypted_data_key = encryptor.update(padded_key) + encryptor.finalize()
-    
-    # Create metadata
+    # Add additional authenticated data
     now = int(time.time())
     if not key_id:
         key_id = f"key-{secrets.token_hex(4)}-{now}"
-        
-    # Combine everything into a result
+    
+    aad = f"vault-v3-{key_id}-{now}".encode()
+    
+    # Encrypt the value
+    ciphertext = aesgcm.encrypt(nonce, value.encode(), aad)
+    
+    # Create result
     result = {
-        "version": "v2",
+        "version": "v3",
         "key_id": key_id,
         "timestamp": now,
-        "encrypted_key": base64.b64encode(encrypted_data_key).decode('ascii'),
-        "key_iv": base64.b64encode(key_iv).decode('ascii'),
-        "data_iv": base64.b64encode(iv).decode('ascii'),
-        "encrypted_value": base64.b64encode(encrypted_value).decode('ascii'),
-        "algorithm": "AES-256-CBC"
+        "salt": base64.b64encode(salt).decode('ascii'),
+        "nonce": base64.b64encode(nonce).decode('ascii'),
+        "encrypted_value": base64.b64encode(ciphertext).decode('ascii'),
+        "algorithm": "AES-256-GCM"
     }
     
     return result
@@ -1082,6 +1063,7 @@ def vault_encrypt(value: str, master_key: str, key_id: str = None) -> Dict[str, 
 def vault_decrypt(encrypted_data: Dict[str, str], master_key: str) -> str:
     """
     Decrypt a value that was encrypted with the vault_encrypt function.
+    Supports both v2 (legacy) and v3 (secure) formats.
     
     Args:
         encrypted_data: Dictionary with encryption metadata and encrypted value
@@ -1090,41 +1072,74 @@ def vault_decrypt(encrypted_data: Dict[str, str], master_key: str) -> str:
     Returns:
         Decrypted value
     """
-    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-    from cryptography.hazmat.primitives import padding
+    version = encrypted_data.get("version")
     
-    # Verify the version
-    if encrypted_data.get("version") != "v2":
-        raise ValueError("Unsupported encryption version")
+    if version == "v3":
+        from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
         
-    # Extract components
-    encrypted_key = base64.b64decode(encrypted_data["encrypted_key"])
-    key_iv = base64.b64decode(encrypted_data["key_iv"])
-    data_iv = base64.b64decode(encrypted_data["data_iv"])
-    encrypted_value = base64.b64decode(encrypted_data["encrypted_value"])
-    
-    # Derive the master key
-    master_key_bytes = hashlib.sha256(master_key.encode()).digest()
-    
-    # Decrypt the data key
-    cipher = Cipher(algorithms.AES(master_key_bytes), modes.CBC(key_iv))
-    decryptor = cipher.decryptor()
-    padded_key = decryptor.update(encrypted_key) + decryptor.finalize()
-    
-    # Unpad the data key
-    unpadder = padding.PKCS7(algorithms.AES.block_size).unpadder()
-    data_key = unpadder.update(padded_key) + unpadder.finalize()
-    
-    # Decrypt the value
-    cipher = Cipher(algorithms.AES(data_key), modes.CBC(data_iv))
-    decryptor = cipher.decryptor()
-    padded_value = decryptor.update(encrypted_value) + decryptor.finalize()
-    
-    # Unpad the value
-    unpadder = padding.PKCS7(algorithms.AES.block_size).unpadder()
-    value = unpadder.update(padded_value) + unpadder.finalize()
-    
-    return value.decode('utf-8')
+        # Extract components
+        salt = base64.b64decode(encrypted_data["salt"])
+        nonce = base64.b64decode(encrypted_data["nonce"])
+        ciphertext = base64.b64decode(encrypted_data["encrypted_value"])
+        
+        # Derive the key
+        kdf = Scrypt(
+            salt=salt,
+            length=32,
+            n=2**15,
+            r=8,
+            p=1
+        )
+        derived_key = kdf.derive(master_key.encode())
+        
+        # Reconstruct AAD
+        key_id = encrypted_data["key_id"]
+        timestamp = encrypted_data["timestamp"]
+        aad = f"vault-v3-{key_id}-{timestamp}".encode()
+        
+        # Decrypt
+        aesgcm = AESGCM(derived_key)
+        plaintext = aesgcm.decrypt(nonce, ciphertext, aad)
+        
+        return plaintext.decode('utf-8')
+        
+    elif version == "v2":
+        # Legacy CBC mode support
+        from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+        from cryptography.hazmat.primitives import padding
+        
+        # Extract components
+        encrypted_key = base64.b64decode(encrypted_data["encrypted_key"])
+        key_iv = base64.b64decode(encrypted_data["key_iv"])
+        data_iv = base64.b64decode(encrypted_data["data_iv"])
+        encrypted_value = base64.b64decode(encrypted_data["encrypted_value"])
+        
+        # Derive the master key (legacy method)
+        master_key_bytes = hashlib.sha256(master_key.encode()).digest()
+        
+        # Decrypt the data key
+        cipher = Cipher(algorithms.AES(master_key_bytes), modes.CBC(key_iv))
+        decryptor = cipher.decryptor()
+        padded_key = decryptor.update(encrypted_key) + decryptor.finalize()
+        
+        # Unpad the data key
+        unpadder = padding.PKCS7(algorithms.AES.block_size).unpadder()
+        data_key = unpadder.update(padded_key) + unpadder.finalize()
+        
+        # Decrypt the value
+        cipher = Cipher(algorithms.AES(data_key), modes.CBC(data_iv))
+        decryptor = cipher.decryptor()
+        padded_value = decryptor.update(encrypted_value) + decryptor.finalize()
+        
+        # Unpad the value
+        unpadder = padding.PKCS7(algorithms.AES.block_size).unpadder()
+        value = unpadder.update(padded_value) + unpadder.finalize()
+        
+        return value.decode('utf-8')
+        
+    else:
+        raise ValueError(f"Unsupported encryption version: {version}")
 
 def generate_environment_integrity_signature(env_values: Dict[str, str], secret_key: str) -> str:
     """
