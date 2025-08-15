@@ -24,6 +24,8 @@ import glob
 import time
 import math
 import datetime
+import threading
+import shutil
 from typing import Dict, List, Any, Union, Optional, Set, Tuple
 from pathlib import Path
 import hashlib
@@ -34,15 +36,18 @@ from Envella.exceptions import DotEnvError, FileNotFoundError, ParseError, Secur
 from Envella.utils import (
     cast_value, sanitize_value, encrypt_value, decrypt_value,
     detect_secrets_in_content, secure_compare, generate_secure_key,
-    check_security_vulnerabilities, generate_mfa_secret, verify_totp_code
+    check_security_vulnerabilities, generate_mfa_secret, verify_totp_code,
+    encrypt_with_quantum_resistant_hybrid, decrypt_with_quantum_resistant_hybrid,
+    secure_load_from_replit_secrets,
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger("Envella")
+# Get version safely
+try:
+    from Envella import __version__
+except ImportError:
+    __version__ = "1.0.0"
+
+logger = logging.getLogger(__name__)
 
 
 class SecureDotEnv:
@@ -112,7 +117,7 @@ class SecureDotEnv:
         
         Args:
             encryption_key: Optional encryption key for sensitive values.
-                           If not provided, sensitive values will not be encrypted.
+                           If not provided, encryption features will be disabled.
             environment: Environment type (development, testing, staging, production)
                         to apply appropriate security policies.
             user_config: Optional user configuration to override default settings.
@@ -124,6 +129,7 @@ class SecureDotEnv:
         self._modified: bool = False
         self._comment_map: Dict[str, str] = {}  # Store comments for each key
         self._created_at = int(time.time())
+        self._lock = threading.RLock()  # Thread safety
         
         # Set environment and load appropriate security level
         self._environment = environment.lower()
@@ -136,11 +142,29 @@ class SecureDotEnv:
         if user_config:
             self._apply_user_config(user_config)
         
-        # Generate a random encryption key if none is provided
+        # Don't generate random key - disable encryption instead
         if not self._encryption_key:
-            self._encryption_key = secrets.token_hex(32)
-            logger.debug("No encryption key provided, generated random key")
+            logger.warning("No encryption key provided; encryption features are disabled.")
+            logger.warning("To enable encryption, provide an encryption key during initialization.")
             
+    def _looks_encrypted(self, value: str) -> bool:
+        """
+        Check if a value is actually encrypted (not just prefixed with ENC:).
+        
+        Args:
+            value: The value to check
+            
+        Returns:
+            True if the value is genuinely encrypted, False otherwise
+        """
+        if not (self._encryption_key and isinstance(value, str) and value.startswith("ENC:")):
+            return False
+        try:
+            decrypt_value(value[4:], self._encryption_key)
+            return True
+        except Exception:
+            return False
+    
     def _apply_user_config(self, user_config: Dict[str, Any]) -> None:
         """
         Apply user configuration to override default settings.
@@ -227,59 +251,71 @@ class SecureDotEnv:
     def _parse_env_content(self, content: str, source: str, override: bool) -> None:
         """
         Parse the content of an env file and extract key-value pairs.
-        Optimized for speed with fewer regex checks and more direct string operations.
+        Handles quoted values and validates key names properly.
         
         Args:
             content: The file content as a string
             source: Source identifier (filename) for error reporting
             override: Whether to override existing values
         """
-        # Precompile regex patterns for sensitive key detection - huge performance boost
-        sensitive_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in self.SENSITIVE_KEY_PATTERNS]
-        
-        # Process all lines in a single pass
-        lines = content.splitlines()
-        modified = False
-        
-        for line_num, line in enumerate(lines, 1):
-            # Skip empty lines and comments - fast path
-            line = line.strip()
-            if not line or line[0] == '#':
-                continue
+        with self._lock:
+            # Improved regex pattern that handles quotes and comments properly
+            LINE_RE = re.compile(
+                r'''^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*
+                    (?:
+                      "([^"\\]*(?:\\.[^"\\]*)*)" |
+                      '([^'\\]*(?:\\.[^'\\]*)*)' |
+                      ([^#\n]*?)
+                    )\s*(?:#.*)?$''', re.X)
+            
+            # Precompile regex patterns for sensitive key detection
+            sensitive_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in self.SENSITIVE_KEY_PATTERNS]
+            
+            lines = content.splitlines()
+            modified = False
+            
+            for line_num, raw_line in enumerate(lines, 1):
+                line = raw_line.strip()
+                if not line or line.startswith('#'):
+                    continue
                 
-            # Extract inline comments - faster than split when comment is rare
-            comment = ''
-            comment_pos = line.find('#')
-            if comment_pos > 0:  # Not at start and exists
-                comment = line[comment_pos+1:].strip()
-                line = line[:comment_pos].strip()
+                match = LINE_RE.match(line)
+                if not match:
+                    logger.warning(f"Invalid line format at {source}:{line_num}: {line}")
+                    continue
+                    
+                key = match.group(1)
+                # Get the value from the appropriate group (double quote, single quote, or raw)
+                value = match.group(2) or match.group(3) or match.group(4)
+                if value is None:
+                    value = ""
+                else:
+                    value = value.strip()
                 
-            # Parse key-value pair with faster check
-            equals_pos = line.find('=')
-            if equals_pos > 0:  # Ensures key isn't empty
-                key = line[:equals_pos].strip()
-                value = line[equals_pos+1:].strip()
+                # Validate key name
+                if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', key):
+                    logger.warning(f"Invalid key name at {source}:{line_num}: {key}")
+                    continue
                 
-                # Fast path for common case - valid key and we're overriding or key doesn't exist
+                # Process escape sequences for quoted strings
+                if match.group(2) or match.group(3):  # quoted string
+                    try:
+                        value = bytes(value, 'utf-8').decode('unicode_escape')
+                    except Exception:
+                        pass  # Keep original value if decode fails
+                
                 if override or key not in self._values:
                     # Check sensitivity with precompiled patterns
                     for pattern in sensitive_patterns:
                         if pattern.search(key):
                             self._sensitive_keys.add(key)
                             break
-                            
-                    # Store the value and comment
-                    self._values[key] = value
-                    if comment:
-                        self._comment_map[key] = comment
                     
+                    self._values[key] = value
                     modified = True
-            else:
-                logger.warning(f"Invalid line format at {source}:{line_num}: {line}")
-        
-        # Only set modified flag once if needed
-        if modified:
-            self._modified = True
+            
+            if modified:
+                self._modified = True
     
     def _security_scan(self, content: str, source: str) -> bool:
         """
@@ -519,16 +555,17 @@ class SecureDotEnv:
             value: The value to set
             comment: Optional comment for the key
         """
-        self._values[key] = str(value)
-        
-        if comment:
-            self._comment_map[key] = comment
+        with self._lock:
+            self._values[key] = str(value)
             
-        # Check if this is a sensitive key
-        if any(re.match(pattern, key, re.IGNORECASE) for pattern in self.SENSITIVE_KEY_PATTERNS):
-            self._sensitive_keys.add(key)
-            
-        self._modified = True
+            if comment:
+                self._comment_map[key] = comment
+                
+            # Check if this is a sensitive key
+            if any(re.match(pattern, key, re.IGNORECASE) for pattern in self.SENSITIVE_KEY_PATTERNS):
+                self._sensitive_keys.add(key)
+                
+            self._modified = True
     
     def save(self, path: Optional[str] = None, include_comments: bool = True) -> bool:
         """
@@ -576,39 +613,42 @@ class SecureDotEnv:
         Encrypt all sensitive values using the encryption key.
         """
         if not self._encryption_key:
-            logger.warning("No encryption key provided, skipping encryption")
+            logger.error("No encryption key provided, cannot encrypt values")
             return
         
-        # Count how many values are actually encrypted
-        encrypted_count = 0
-            
-        for key in self._sensitive_keys:
-            if key in self._values and not self._values[key].startswith('ENC:'):
-                plain_value = self._values[key]
-                encrypted = encrypt_value(plain_value, self._encryption_key)
-                self._values[key] = f"ENC:{encrypted}"
-                encrypted_count += 1
+        with self._lock:
+            encrypted_count = 0
                 
-        logger.info(f"Encrypted {encrypted_count} sensitive values")
+            for key in self._sensitive_keys:
+                if key in self._values and not self._looks_encrypted(self._values[key]):
+                    plain_value = self._values[key]
+                    encrypted = encrypt_value(plain_value, self._encryption_key)
+                    self._values[key] = f"ENC:{encrypted}"
+                    encrypted_count += 1
+                    
+            logger.info(f"Encrypted {encrypted_count} sensitive values")
     
     def decrypt_sensitive_values(self) -> None:
         """
         Decrypt all encrypted sensitive values.
         """
         if not self._encryption_key:
-            logger.warning("No encryption key provided, skipping decryption")
+            logger.error("No encryption key provided, cannot decrypt values")
             return
-            
-        for key in self._sensitive_keys:
-            if key in self._values and self._values[key].startswith('ENC:'):
-                encrypted = self._values[key][4:]  # Remove 'ENC:' prefix
-                try:
-                    decrypted = decrypt_value(encrypted, self._encryption_key)
-                    self._values[key] = decrypted
-                except Exception as e:
-                    logger.error(f"Failed to decrypt {key}: {str(e)}")
-                    
-        logger.info("Decrypted sensitive values")
+        
+        with self._lock:
+            decrypted_count = 0
+            for key in self._sensitive_keys:
+                if key in self._values and self._looks_encrypted(self._values[key]):
+                    encrypted = self._values[key][4:]  # Remove 'ENC:' prefix
+                    try:
+                        decrypted = decrypt_value(encrypted, self._encryption_key)
+                        self._values[key] = decrypted
+                        decrypted_count += 1
+                    except Exception as e:
+                        logger.error(f"Failed to decrypt {key}: {str(e)}")
+                        
+            logger.info(f"Decrypted {decrypted_count} sensitive values")
     
     def validate_required_keys(self, required_keys: List[str]) -> Tuple[bool, List[str]]:
         """
@@ -1680,8 +1720,6 @@ class SecureDotEnv:
         Note:
             This method starts a background thread that runs until the program exits.
         """
-        import threading
-        
         # Store file modification times
         file_mtimes = {}
         for file_path in self._loaded_files:
@@ -1690,36 +1728,42 @@ class SecureDotEnv:
                 
         def watcher():
             while True:
-                changed_files = []
-                for file_path in self._loaded_files:
-                    if os.path.exists(file_path):
-                        current_mtime = os.path.getmtime(file_path)
-                        if file_path in file_mtimes and current_mtime > file_mtimes[file_path]:
-                            changed_files.append(file_path)
-                            file_mtimes[file_path] = current_mtime
-                            
-                if changed_files:
-                    # Remember old values to detect changes
-                    old_values = self._values.copy()
-                    
-                    # Reload changed files
-                    for file_path in changed_files:
-                        self.import_env(file_path, override=True)
+                try:
+                    changed_files = []
+                    for file_path in self._loaded_files:
+                        if os.path.exists(file_path):
+                            current_mtime = os.path.getmtime(file_path)
+                            if file_path in file_mtimes and current_mtime > file_mtimes[file_path]:
+                                changed_files.append(file_path)
+                                file_mtimes[file_path] = current_mtime
+                                
+                    if changed_files:
+                        # Take snapshot of current values under lock
+                        with self._lock:
+                            old_values = self._values.copy()
                         
-                    # Determine changed keys
-                    changed_keys = []
-                    for key, value in self._values.items():
-                        if key not in old_values or old_values[key] != value:
-                            changed_keys.append(key)
+                        # Reload changed files
+                        for file_path in changed_files:
+                            self.import_env(file_path, override=True)
                             
-                    # Call the callback with changed keys
-                    if changed_keys and callback:
-                        try:
-                            callback(changed_keys)
-                        except Exception as e:
-                            logger.error(f"Error in file change callback: {str(e)}")
-                
-                time.sleep(interval)
+                        # Determine changed keys under lock
+                        with self._lock:
+                            changed_keys = []
+                            for key, value in self._values.items():
+                                if key not in old_values or old_values[key] != value:
+                                    changed_keys.append(key)
+                        
+                        # Call the callback outside of lock
+                        if changed_keys and callback:
+                            try:
+                                callback(changed_keys)
+                            except Exception as e:
+                                logger.error(f"Error in file change callback: {str(e)}")
+                    
+                    time.sleep(interval)
+                except Exception as e:
+                    logger.error(f"Error in file watcher: {str(e)}")
+                    time.sleep(interval)
                 
         # Start the watcher thread
         thread = threading.Thread(target=watcher, daemon=True)
@@ -1727,55 +1771,35 @@ class SecureDotEnv:
         
     def secure_delete(self, key: str) -> None:
         """
-        Securely delete a key and overwrite its value in memory.
+        Delete a key and attempt to clear its value from memory.
+        
+        Note: In Python, true secure memory wiping is not guaranteed due to
+        string immutability and garbage collection. This is a best-effort
+        attempt to clear the value from our internal structures.
+        
+        For truly secure deletion, consider using external secret managers.
         
         Args:
             key: Key to delete
         """
-        if key in self._values:
-            # Overwrite the value with random data
-            value_length = len(self._values[key])
-            self._values[key] = ''.join(secrets.choice('0123456789abcdef') for _ in range(value_length))
+        with self._lock:
+            if key in self._values:
+                # Best-effort overwrite (not guaranteed in Python)
+                value_length = len(self._values[key])
+                self._values[key] = ''.join(secrets.choice('0123456789abcdef') for _ in range(value_length))
+                
+                # Delete the key from all structures
+                del self._values[key]
+                
+                if key in self._sensitive_keys:
+                    self._sensitive_keys.remove(key)
+                    
+                if key in self._comment_map:
+                    del self._comment_map[key]
+                    
+                self._modified = True
             
-            # Delete the key
-            del self._values[key]
-            
-            if key in self._sensitive_keys:
-                self._sensitive_keys.remove(key)
-                
-            if key in self._comment_map:
-                del self._comment_map[key]
-                
-            self._modified = True
-            
-    def protect_against_timing_attacks(self) -> None:
-        """
-        Add protection against timing attacks for sensitive values by padding them.
-        
-        This helps mitigate timing attacks by ensuring all values have similar
-        cryptographic processing time.
-        """
-        for key in self._sensitive_keys:
-            if key in self._values and not self._values[key].startswith('ENC:'):
-                # Add random padding to the value
-                original_value = self._values[key]
-                padding_length = secrets.randbelow(10) + 1  # Random padding of 1-10 characters
-                padding = ''.join(secrets.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789') 
-                                 for _ in range(padding_length))
-                
-                # Format: original_value + "|PADDING:" + padding
-                padded_value = f"{original_value}|PADDING:{padding}"
-                self._values[key] = padded_value
-                
-    def remove_padding(self) -> None:
-        """
-        Remove padding from values that were protected against timing attacks.
-        """
-        for key in self._values:
-            value = self._values[key]
-            if "|PADDING:" in value:
-                original_value = value.split("|PADDING:", 1)[0]
-                self._values[key] = original_value
+    
                 
     def get_or_create(self, key: str, default_generator: callable = None) -> str:
         """
